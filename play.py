@@ -4,6 +4,8 @@ import pygame
 import math
 import numpy as np
 import cv2
+import time
+
 
 def cart2pol(x, y):
     rho = np.sqrt(x**2 + y**2)
@@ -24,6 +26,10 @@ joystick = pygame.joystick.Joystick(0)
 joystick.init()
 
 test_image_shown = False
+
+start_time = time.time()
+x = 1 # displays the frame rate every 1 second
+counter = 0
 
 while True:
 	if p.game_over():
@@ -48,10 +54,16 @@ while True:
 
 	observation = p.getScreenRGB()
 
-	if not test_image_shown:
-		cv2.imshow("obs", observation)
-		cv2.waitKey(1)
+	# if not test_image_shown:
+	# 	cv2.imshow("obs", observation)
+	# 	cv2.waitKey(1)
 
 
 	action = (0, (r, phi))
 	reward = p.act(action)
+
+	counter += 1
+	if (time.time() - start_time) > x:
+		print("FPS: ", counter / (time.time() - start_time))
+		counter = 0
+		start_time = time.time()

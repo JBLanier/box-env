@@ -179,7 +179,7 @@ class BoxPush(base.PyGameWrapper):
 
     """
 
-    def __init__(self, display_width=50, display_height=50, init_lives=3):
+    def __init__(self, display_width=500, display_height=500, init_lives=3):
         self.collision = False
         actions = {
             "apply_force": (0, [(-1,1),(0,1)])
@@ -478,6 +478,7 @@ class BoxPush(base.PyGameWrapper):
         return self.lives == 0
 
     def step(self, dt):
+        print("fps: {}".format(1000/dt))
         self.screen.fill((255, 255, 255))
         self._handle_player_events()
 
