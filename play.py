@@ -8,62 +8,52 @@ import time
 
 
 def cart2pol(x, y):
-    rho = np.sqrt(x**2 + y**2)
+    rho = np.sqrt(x ** 2 + y ** 2)
     phi = np.arctan2(y, x)
-    return(rho, phi)
+    return (rho, phi)
 
-game = BoxPush()
+
+game = BoxPush(display_width=100, display_height=100)
 p = ContinousPLE(game, fps=30, display_screen=True, add_noop_action=False)
-print(p.getActionSet())
 
 p.init()
 reward = 0.0
 
 pygame.joystick.init()
 
-
 joystick = pygame.joystick.Joystick(0)
 joystick.init()
 
 test_image_shown = False
 
-start_time = time.time()
-x = 1 # displays the frame rate every 1 second
-counter = 0
-
 while True:
-	if p.game_over():
-	       p.reset_game()
+    frame_start_time = time.time()
 
-	x = joystick.get_axis(0)
-	y = joystick.get_axis(1)
+    if p.game_over():
+        p.reset_game()
 
-	# print("X,Y: ({},{})".format(x,y))
-	r,phi = cart2pol(x,y)
+    x = joystick.get_axis(0)
+    y = joystick.get_axis(1)
 
-	if abs(r) < 0.12:
-		r = 0
-	else:
-		r = min(1,r)
-		r = r + 0.12 * math.log(r)
-		r = r * 0.30
+    # print("X,Y: ({},{})".format(x,y))
+    r, phi = cart2pol(x, y)
 
+    if abs(r) < 0.12:
+        r = 0
+    else:
+        r = min(1, r)
+        r = r + 0.12 * math.log(r)
+        r = r * 0.30
 
-	# print("r,phi: ({},{})".format(r,phi))
+    # print("r,phi: ({},{})".format(r,phi))
 
+    observation = p.getScreenRGB()
 
-	observation = p.getScreenRGB()
+    # if not test_image_shown:
+    # 	cv2.imshow("obs", observation)
+    # 	cv2.waitKey(1)
 
-	# if not test_image_shown:
-	# 	cv2.imshow("obs", observation)
-	# 	cv2.waitKey(1)
+    action = (0, (r, phi))
+    reward = p.act(action)
 
-
-	action = (0, (r, phi))
-	reward = p.act(action)
-
-	counter += 1
-	if (time.time() - start_time) > x:
-		print("FPS: ", counter / (time.time() - start_time))
-		counter = 0
-		start_time = time.time()
+    time.sleep((15.4444444 - (time.time() - frame_start_time)) * 0.001)

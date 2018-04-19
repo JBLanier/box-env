@@ -2,17 +2,14 @@ import sys
 import pygame
 
 from ple.games import base
-from pygame.constants import K_a
 import numpy as np
-import time
-import math
 
-
-CONTINOUSACTION = pygame.USEREVENT+1
+CONTINUOUS_ACTION = pygame.USEREVENT + 1
 
 
 def percent_round_int(percent, x):
     return np.round(percent * x * 0.01).astype(int)
+
 
 def pol2cart(rho, phi):
     x = rho * np.cos(phi)
@@ -21,12 +18,12 @@ def pol2cart(rho, phi):
     # print("r:{}, phi: {}, x: {}, Y: {}".format(rho, phi, x,y))
     return np.asarray([x, y])
 
-class TeleporterPair:
 
+class TeleporterPair:
+    
     class Teleporter(pygame.sprite.Sprite):
 
         def __init__(self, x, y, width, height, SCREEN_WIDTH, SCREEN_HEIGHT):
-
             self.occupied_after_transport = False
             self.empty = True
             self.movable = False
@@ -49,10 +46,10 @@ class TeleporterPair:
 
             pygame.draw.rect(
                 self.image,
-                (255,180,180),
+                (255, 180, 180),
                 (percent_round_int(SCREEN_WIDTH, 1), percent_round_int(SCREEN_HEIGHT, 1),
-                 percent_round_int(SCREEN_WIDTH, width-2),
-                 percent_round_int(SCREEN_HEIGHT, height-2)),
+                 percent_round_int(SCREEN_WIDTH, width - 2),
+                 percent_round_int(SCREEN_HEIGHT, height - 2)),
                 0
             )
 
@@ -62,12 +59,12 @@ class TeleporterPair:
                          percent_round_int(self.SCREEN_HEIGHT, self.rect.center[1] - self.length[1] / 2)))
 
         def is_box_inside(self, box):
-            if np.all((box.center + box.length/2 < self.center + self.length/2) &
-                    (box.center - box.length/2 > self.center - self.length/2)):
+            if np.all((box.center + box.length / 2 < self.center + self.length / 2) &
+                      (box.center - box.length / 2 > self.center - self.length / 2)):
                 return True
             return False
 
-    def __init__(self, x1, y1, width1, height1,  x2, y2, width2, height2, SCREEN_WIDTH, SCREEN_HEIGHT):
+    def __init__(self, x1, y1, width1, height1, x2, y2, width2, height2, SCREEN_WIDTH, SCREEN_HEIGHT):
         self.ports = [TeleporterPair.Teleporter(x1, y1, width1, height1, SCREEN_WIDTH, SCREEN_HEIGHT),
                       TeleporterPair.Teleporter(x2, y2, width2, height2, SCREEN_WIDTH, SCREEN_HEIGHT)]
 
@@ -76,11 +73,10 @@ class TeleporterPair:
             port.draw(screen)
 
 
-
 class Box(pygame.sprite.Sprite):
 
     def __init__(self, x, y, width, height, SCREEN_WIDTH, SCREEN_HEIGHT,
-                 mass=100, color=(0,0,0), bounciness=0.01, friction=0.1, is_controlled=False, movable=True):
+                 mass=100, color=(0, 0, 0), bounciness=0.01, friction=0.1, is_controlled=False, movable=True):
 
         self.length = np.asarray([width, height])
 
@@ -90,14 +86,14 @@ class Box(pygame.sprite.Sprite):
         self.SCREEN_HEIGHT = SCREEN_HEIGHT
 
         self.mass = mass
-        self.bounciness=bounciness
-        self.friction=friction
+        self.bounciness = bounciness
+        self.friction = friction
 
         self.is_controlled = is_controlled
         pygame.sprite.Sprite.__init__(self)
 
         image = pygame.Surface((
-            percent_round_int(SCREEN_WIDTH, width), 
+            percent_round_int(SCREEN_WIDTH, width),
             percent_round_int(SCREEN_HEIGHT, height)))
         image.fill(color)
         image.set_colorkey((255, 255, 255))
@@ -113,8 +109,8 @@ class Box(pygame.sprite.Sprite):
 
         self.image = image
         self.rect = self.image.get_rect()
-        self.center = np.asarray([x,y],dtype=np.float)
-        self.vel = np.asarray([0.0,0.0],dtype=np.float)
+        self.center = np.asarray([x, y], dtype=np.float)
+        self.vel = np.asarray([0.0, 0.0], dtype=np.float)
 
         self.rect = self.image.get_rect()
         self.rect.center = self.center
@@ -131,7 +127,7 @@ class Box(pygame.sprite.Sprite):
             if gravitational_force is not None:
                 force += gravitational_force[axis]
 
-            accel = force/self.mass
+            accel = force / self.mass
             accel = accel * 0.01
 
             # print("accel: {}".format(accel))
@@ -153,11 +149,10 @@ class Box(pygame.sprite.Sprite):
             self.center = update[1]
             self.rect.center = self.center
 
-
     def draw(self, screen):
-        screen.blit(self.image, 
-            (percent_round_int(self.SCREEN_WIDTH, self.center[0]-self.length[0]/2),
-            percent_round_int(self.SCREEN_HEIGHT, self.center[1]-self.length[1]/2)))
+        screen.blit(self.image,
+                    (percent_round_int(self.SCREEN_WIDTH, self.center[0] - self.length[0] / 2),
+                     percent_round_int(self.SCREEN_HEIGHT, self.center[1] - self.length[1] / 2)))
 
 
 class BoxPush(base.PyGameWrapper):
@@ -179,16 +174,13 @@ class BoxPush(base.PyGameWrapper):
 
     """
 
-    def __init__(self, display_width=500, display_height=500, init_lives=3):
-        self.collision = False
+    def __init__(self, display_width=500, display_height=500):
         actions = {
-            "apply_force": (0, [(-1,1),(0,1)])
+            "apply_force": (0, [(-1, 1), (0, 1)])
         }
-
         base.PyGameWrapper.__init__(self, display_width, display_height, actions=actions)
 
         self.force_applied = np.asarray([0.0, 0.0])
-        self.init_lives = init_lives
 
     def _setAction(self, action, last_action=None):
         """
@@ -199,7 +191,7 @@ class BoxPush(base.PyGameWrapper):
 
         if isinstance(action, tuple):
             # action is continous
-            action_event = pygame.event.Event(CONTINOUSACTION, {"value": action})
+            action_event = pygame.event.Event(CONTINUOUS_ACTION, {"value": action})
             pygame.event.post(action_event)
         else:
             print("expecting a tuple of the form (action, [(value,value..)] for continous action space")
@@ -210,26 +202,27 @@ class BoxPush(base.PyGameWrapper):
                 pygame.quit()
                 sys.exit()
 
-            if event.type == CONTINOUSACTION:
+            if event.type == CONTINUOUS_ACTION:
                 magnitude, degree = event.value[1]
                 self.force_applied = pol2cart(magnitude, degree)
 
-    def _check_rect_collision(self, center1, half_legnth1, movable1, center2, half_length2, movable2):
+    @staticmethod
+    def _check_rect_collision(center1, half_length1, movable1, center2, half_length2, movable2):
 
         if not movable1 and not movable2:
             # don't consider intersecting immobile objects as collisions
             return False
 
         return np.all(
-            (center1 + half_legnth1 >= center2 - half_length2 + 0.0001) &
-            (center1 - half_legnth1 + 0.0001 <= center2 + half_length2)
-            )
+            (center1 + half_length1 >= center2 - half_length2 + 0.0001) &
+            (center1 - half_length1 + 0.0001 <= center2 + half_length2)
+        )
 
     def _handle_collision(self, update_a, update_b, box_a, box_b, axis):
         # returns true is there was a collision
 
-        if self._check_rect_collision(update_a[1], box_a.length/2, box_a.movable,
-                                      update_b[1], box_b.length/2, box_b.movable):
+        if self._check_rect_collision(update_a[1], box_a.length / 2, box_a.movable,
+                                      update_b[1], box_b.length / 2, box_b.movable):
             # print("COLLISION, index: {}".format(axis))
 
             d = update_a[1][axis] - update_b[1][axis]
@@ -237,40 +230,35 @@ class BoxPush(base.PyGameWrapper):
 
             # print("overlap: {}".format(vertical_overlap))
 
-            im_p = 1 / box_a.mass if box_a.movable else 0
-            im_o = 1 / box_b.mass if box_b.movable else 0
+            im_a = 1 / box_a.mass if box_a.movable else 0
+            im_b = 1 / box_b.mass if box_b.movable else 0
 
-            # if im_p == 0:
-            #     print("imp is 0")
-            #
-            # if im_o == 0:
-            #     print("imo is 0")
-
-            update_i_adjust = update_a[1][axis] + vertical_overlap * im_p / (im_p + im_o)
+            update_i_adjust = update_a[1][axis] + vertical_overlap * im_a / (im_a + im_b)
             update_a[1][axis] = update_i_adjust
             # print("location adjust for i: {}".format(update_i_adjust))
 
-            update_j_adjust = update_b[1][axis] - vertical_overlap * im_o / (im_p + im_o)
+            update_j_adjust = update_b[1][axis] - vertical_overlap * im_b / (im_a + im_b)
             update_b[1][axis] = update_j_adjust
             # print("location adjust for j: {}".format(update_j_adjust))
 
             velocity_diff = (update_a[0][axis] - update_b[0][axis]) * d / abs(d)
 
             if velocity_diff <= 0.0:
-
-                impulse = -d/abs(d) * velocity_diff / (im_p + im_o)
+                impulse = -d / abs(d) * velocity_diff / (im_a + im_b)
 
                 # print("impulse: {}".format(impulse))
                 #
                 # print("old update vel: {}, new update vel: {}".format(update_a[0][axis],
                 #                                                       update_a[0][axis] + impulse * im_p))
-                update_a[0][axis] = update_a[0][axis] + impulse * (1 + box_a.bounciness) * im_p
-                update_b[0][axis] = update_b[0][axis] - impulse * (1 + box_b.bounciness) * im_o
+                update_a[0][axis] = update_a[0][axis] + impulse * (1 + box_a.bounciness) * im_a
+                update_b[0][axis] = update_b[0][axis] - impulse * (1 + box_b.bounciness) * im_b
 
-                relative_tangential_velocity = update_a[0][(axis+1)%2] - update_b[0][(axis+1)%2]
+                relative_tangential_velocity = update_a[0][(axis + 1) % 2] - update_b[0][(axis + 1) % 2]
                 # print("relative_tangential_velocity: {}".format(relative_tangential_velocity))
-                update_a[0][(axis+1)%2] = update_a[0][(axis+1)%2] - abs(impulse) * (box_a.friction + box_b.friction) * relative_tangential_velocity
-                update_b[0][(axis+1)%2] = update_b[0][(axis+1)% 2] + abs(impulse) * (box_a.friction + box_b.friction) * relative_tangential_velocity
+                update_a[0][(axis + 1) % 2] = update_a[0][(axis + 1) % 2] - abs(impulse) * (
+                            box_a.friction + box_b.friction) * relative_tangential_velocity
+                update_b[0][(axis + 1) % 2] = update_b[0][(axis + 1) % 2] + abs(impulse) * (
+                            box_a.friction + box_b.friction) * relative_tangential_velocity
 
             return True
 
@@ -278,15 +266,17 @@ class BoxPush(base.PyGameWrapper):
 
     def _handle_physics(self, dt):
 
-        for k in range(0,2):
+        for k in range(0, 2):
 
-            updates = list(map(lambda x: x.get_update(dt, axis=k, force_applied=self.force_applied, gravitational_force=None), self.boxes))
+            updates = list(
+                map(lambda x: x.get_update(dt, axis=k, force_applied=self.force_applied, gravitational_force=None),
+                    self.boxes))
 
             done = False
             while not done:
                 done = True
                 for i in range(0, len(updates)):
-                    for j in range(i+1, len(updates)):
+                    for j in range(i + 1, len(updates)):
 
                         if self._handle_collision(updates[i], updates[j], self.boxes[i], self.boxes[j], axis=k):
                             done = False
@@ -301,8 +291,9 @@ class BoxPush(base.PyGameWrapper):
                 if not teleporter.ports[p].empty:
                     empty = True
                     for box in self.boxes:
-                        if self._check_rect_collision(box.center,box.length/2,box.movable,
-                                                      teleporter.ports[p].center,teleporter.ports[p].length/2,teleporter.ports[p].movable):
+                        if self._check_rect_collision(box.center, box.length / 2, box.movable,
+                                                      teleporter.ports[p].center, teleporter.ports[p].length / 2,
+                                                      teleporter.ports[p].movable):
                             empty = False
                             break
 
@@ -312,35 +303,33 @@ class BoxPush(base.PyGameWrapper):
 
         for teleporter in self.teleporter_pairs:
             for p in range(2):
-                if not teleporter.ports[p].occupied_after_transport and teleporter.ports[(p+1)%2].empty:
+                if not teleporter.ports[p].occupied_after_transport and teleporter.ports[(p + 1) % 2].empty:
                     for box in self.boxes:
-                        if self._check_rect_collision(box.center,box.length/2, box.movable,
-                                                      teleporter.ports[p].center,teleporter.ports[p].length/2, teleporter.ports[p].movable):
-                            update = (box.vel, teleporter.ports[(p+1)%2].center)
+                        if self._check_rect_collision(box.center, box.length / 2, box.movable,
+                                                      teleporter.ports[p].center, teleporter.ports[p].length / 2,
+                                                      teleporter.ports[p].movable):
+                            update = (box.vel, teleporter.ports[(p + 1) % 2].center)
                             # print("Teleporter update: {}".format(update))
                             box.apply_update(update)
                             teleporter.ports[(p + 1) % 2].occupied_after_transport = True
                             teleporter.ports[(p + 1) % 2].empty = False
                             break
 
-
     def init(self):
-        self.score = 0
-        self.lives = self.init_lives
         self.boxes = []
 
         player = Box(
             x=50,
             y=15,
-            width=10, 
-            height=10, 
+            width=10,
+            height=10,
             mass=100,
-            color=(0,255,0),
+            color=(0, 255, 0),
             friction=0.1,
             SCREEN_WIDTH=self.width,
             SCREEN_HEIGHT=self.height,
             is_controlled=True
-            )
+        )
 
         box1 = Box(
             x=45,
@@ -348,11 +337,11 @@ class BoxPush(base.PyGameWrapper):
             width=10,
             height=10,
             mass=100,
-            color=(140,50,50),
+            color=(140, 50, 50),
             friction=0.1,
             SCREEN_WIDTH=self.width,
             SCREEN_HEIGHT=self.height
-            )
+        )
 
         box2 = Box(
             x=55,
@@ -360,11 +349,11 @@ class BoxPush(base.PyGameWrapper):
             width=10,
             height=10,
             mass=100,
-            color=(140,50,50),
+            color=(140, 50, 50),
             friction=0.1,
             SCREEN_WIDTH=self.width,
             SCREEN_HEIGHT=self.height
-            )
+        )
 
         bouncy_box = Box(
             x=75,
@@ -372,12 +361,12 @@ class BoxPush(base.PyGameWrapper):
             width=10,
             height=10,
             mass=100,
-            color=(100,180,250),
+            color=(100, 180, 250),
             friction=0.1,
             bounciness=0.8,
             SCREEN_WIDTH=self.width,
             SCREEN_HEIGHT=self.height
-            )
+        )
 
         player.vel = player.vel + [0, 0.01]
         box1.vel = box1.vel + [0.0, -0.01]
@@ -449,36 +438,15 @@ class BoxPush(base.PyGameWrapper):
         ))
 
     def getGameState(self):
-        """
-        Gets a non-visual state representation of the game.
-
-        Returns
-        -------
-
-        dict
-            * player x position.
-            * players velocity.
-            * fruits x position.
-            * fruits y position.
-
-            See code for structure.
-
-        """
-        state = {
-            "player_x": self.player.rect.center[0],
-            "player_vel": self.player.vel,
-        }
-
-        return state
+        raise NotImplementedError
 
     def getScore(self):
-        return self.score
+        return 0
 
     def game_over(self):
-        return self.lives == 0
+        return False
 
     def step(self, dt):
-        print("fps: {}".format(1000/dt))
         self.screen.fill((255, 255, 255))
         self._handle_player_events()
 
@@ -492,25 +460,23 @@ class BoxPush(base.PyGameWrapper):
         for box in self.boxes:
             box.draw(self.screen)
 
-
         if self.lives == 0:
             self.score += self.rewards["loss"]
 
-       
-
-if __name__ == "__main__":
-
-    pygame.init()
-    game = BoxPush(width=256, height=256)
-    game.rng = np.random.RandomState(24)
-    game.screen = pygame.display.set_mode(game.getScreenDims(), 0, 32)
-    game.clock = pygame.time.Clock()
-    game.init()
-
-    while True:
-        dt = game.clock.tick_busy_loop(30)
-        if game.game_over():
-            game.reset()
-
-        game.step(dt)
-        pygame.display.update()
+#
+# if __name__ == "__main__":
+#
+#     pygame.init()
+#     game = BoxPush(width=256, height=256)
+#     game.rng = np.random.RandomState(24)
+#     game.screen = pygame.display.set_mode(game.getScreenDims(), 0, 32)
+#     game.clock = pygame.time.Clock()
+#     game.init()
+#
+#     while True:
+#         dt = game.clock.tick_busy_loop(30)
+#         if game.game_over():
+#             game.reset()
+#
+#         game.step(dt)
+#         pygame.display.update()
