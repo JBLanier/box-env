@@ -19,3 +19,6 @@ class ContinousPLE(PLE):
 
 	    return self._getReward()
 
+	def quit(self):
+		self.game.quit()
+

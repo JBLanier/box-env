@@ -182,6 +182,9 @@ class BoxPush(base.PyGameWrapper):
 
         self.force_applied = np.asarray([0.0, 0.0])
 
+    def quit(self):
+        pygame.quit()
+
     def _setAction(self, action, last_action=None):
         """
         Pushes the action to the pygame event queue.
@@ -198,10 +201,6 @@ class BoxPush(base.PyGameWrapper):
 
     def _handle_player_events(self):
         for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-
             if event.type == CONTINUOUS_ACTION:
                 magnitude, degree = event.value[1]
                 self.force_applied = pol2cart(magnitude, degree)
