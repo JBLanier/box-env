@@ -1,10 +1,18 @@
-import sys
-import pygame
-
-from ple.games import base
 import numpy as np
+import gym
+# import sys
+#
+# import pyglet
+# from pyglet import gl
 
-CONTINUOUS_ACTION = pygame.USEREVENT + 1
+# pyglet.options['shadow_window'] = False
+
+FPS = 30
+
+STATE_W = 64
+STATE_H = 64
+WINDOW_W = 500
+WINDOW_H = 500
 
 
 def percent_round_int(percent, x):
@@ -21,42 +29,18 @@ def pol2cart(rho, phi):
 
 class TeleporterPair:
     
-    class Teleporter(pygame.sprite.Sprite):
+    class Teleporter():
 
-        def __init__(self, x, y, width, height, SCREEN_WIDTH, SCREEN_HEIGHT):
+        def __init__(self, x, y, width, height):
+            self.geom = None
+            self.transform = None
+
             self.occupied_after_transport = False
             self.empty = True
             self.movable = False
-            self.SCREEN_WIDTH = SCREEN_WIDTH
-            self.SCREEN_HEIGHT = SCREEN_HEIGHT
             self.length = np.asarray([width, height])
 
-            pygame.sprite.Sprite.__init__(self)
-
-            self.image = pygame.Surface((
-                percent_round_int(SCREEN_WIDTH, width),
-                percent_round_int(SCREEN_HEIGHT, height)))
-            self.image.fill((240, 150, 150, 0))
-            self.image.set_colorkey((255, 195, 195))
-
             self.center = np.asarray([x, y], dtype=np.float)
-
-            self.rect = self.image.get_rect()
-            self.rect.center = (x, y)
-
-            pygame.draw.rect(
-                self.image,
-                (255, 180, 180),
-                (percent_round_int(SCREEN_WIDTH, 1), percent_round_int(SCREEN_HEIGHT, 1),
-                 percent_round_int(SCREEN_WIDTH, width - 2),
-                 percent_round_int(SCREEN_HEIGHT, height - 2)),
-                0
-            )
-
-        def draw(self, screen):
-            screen.blit(self.image,
-                        (percent_round_int(self.SCREEN_WIDTH, self.rect.center[0] - self.length[0] / 2),
-                         percent_round_int(self.SCREEN_HEIGHT, self.rect.center[1] - self.length[1] / 2)))
 
         def is_box_inside(self, box):
             if np.all((box.center + box.length / 2 < self.center + self.length / 2) &
@@ -64,56 +48,31 @@ class TeleporterPair:
                 return True
             return False
 
-    def __init__(self, x1, y1, width1, height1, x2, y2, width2, height2, SCREEN_WIDTH, SCREEN_HEIGHT):
-        self.ports = [TeleporterPair.Teleporter(x1, y1, width1, height1, SCREEN_WIDTH, SCREEN_HEIGHT),
-                      TeleporterPair.Teleporter(x2, y2, width2, height2, SCREEN_WIDTH, SCREEN_HEIGHT)]
-
-    def draw(self, screen):
-        for port in self.ports:
-            port.draw(screen)
+    def __init__(self, x1, y1, width1, height1, x2, y2, width2, height2):
+        self.ports = [TeleporterPair.Teleporter(x1, y1, width1, height1),
+                      TeleporterPair.Teleporter(x2, y2, width2, height2)]
 
 
-class Box(pygame.sprite.Sprite):
+class Box():
 
-    def __init__(self, x, y, width, height, SCREEN_WIDTH, SCREEN_HEIGHT,
-                 mass=100, color=(0, 0, 0), bounciness=0.01, friction=0.1, is_controlled=False, movable=True):
+    def __init__(self, x, y, width, height, mass=100, color=(0, 0, 0), bounciness=0.01,
+                 friction=0.1, is_controlled=False, movable=True):
+
+        self.geom = None
+        self.transform = None
 
         self.length = np.asarray([width, height])
 
         self.movable = movable
-
-        self.SCREEN_WIDTH = SCREEN_WIDTH
-        self.SCREEN_HEIGHT = SCREEN_HEIGHT
-
+        self.color = color
         self.mass = mass
         self.bounciness = bounciness
         self.friction = friction
 
         self.is_controlled = is_controlled
-        pygame.sprite.Sprite.__init__(self)
 
-        image = pygame.Surface((
-            percent_round_int(SCREEN_WIDTH, width),
-            percent_round_int(SCREEN_HEIGHT, height)))
-        image.fill(color)
-        image.set_colorkey((255, 255, 255))
-
-        # pygame.draw.rect(
-        #     image,
-        #     color,
-        #     (0, 0,
-        #         percent_round_int(SCREEN_WIDTH, width),
-        #         percent_round_int(SCREEN_HEIGHT, height)),
-        #     0
-        # )
-
-        self.image = image
-        self.rect = self.image.get_rect()
         self.center = np.asarray([x, y], dtype=np.float)
         self.vel = np.asarray([0.0, 0.0], dtype=np.float)
-
-        self.rect = self.image.get_rect()
-        self.rect.center = self.center
 
     def get_update(self, dt, axis, force_applied=None, gravitational_force=None):
 
@@ -147,63 +106,132 @@ class Box(pygame.sprite.Sprite):
         if self.movable:
             self.vel = update[0]
             self.center = update[1]
-            self.rect.center = self.center
-
-    def draw(self, screen):
-        screen.blit(self.image,
-                    (percent_round_int(self.SCREEN_WIDTH, self.center[0] - self.length[0] / 2),
-                     percent_round_int(self.SCREEN_HEIGHT, self.center[1] - self.length[1] / 2)))
 
 
-class BoxPush(base.PyGameWrapper):
-    """
-    Based on `Eder Santana`_'s game idea.
-
-    .. _`Eder Santana`: https://github.com/EderSantana
-
-    Parameters
-    ----------
-    width : int
-        Screen width.
-
-    height : int
-        Screen height, recommended to be same dimension as width.
-
-    init_lives : int (default: 3)
-        The number lives the agent has.
-
-    """
+class BoxPush(gym.Env):
+    metadata = {
+        'render.modes': ['human', 'rgb_array'],
+        'video.frames_per_second': FPS
+    }
 
     def __init__(self, display_width=500, display_height=500):
-        actions = {
-            "apply_force": (0, [(-1, 1), (0, 1)])
-        }
-        base.PyGameWrapper.__init__(self, display_width, display_height, actions=actions)
+        self.action_space = gym.spaces.Box( np.array([0, -1]), np.array([+1, +1]), dtype=np.float32)  # force magnitude and direction
 
+        self.observation_space = gym.spaces.Box(low=0, high=255, shape=(STATE_H, STATE_W, 3), dtype=np.uint8)
+
+        self.pyglet = None
+        self.gl = None
+
+        self.viewer = None
+        self.state_pixels_context = None
+        self.human_render = False
+
+        self.reset_state()
+
+    def reset_state(self):
         self.force_applied = np.asarray([0.0, 0.0])
 
-    def quit(self):
-        pygame.quit()
+        self.boxes = []
 
-    def _setAction(self, action, last_action=None):
-        """
-        Pushes the action to the pygame event queue.
-        """
-        if action is None:
-            action = self.NOOP
+        player = Box(
+            x=50,
+            y=15,
+            width=10,
+            height=10,
+            mass=100,
+            color=(0, 1, 0),
+            friction=0.1,
+            is_controlled=True
+        )
 
-        if isinstance(action, tuple):
-            # action is continous
-            action_event = pygame.event.Event(CONTINUOUS_ACTION, {"value": action})
-            pygame.event.post(action_event)
-        else:
-            print("expecting a tuple of the form (action, [(value,value..)] for continous action space")
+        box1 = Box(
+            x=45,
+            y=83,
+            width=10,
+            height=10,
+            mass=100,
+            color=(.55, .2, .2),
+            friction=0.1,
+        )
 
-    def _handle_player_events(self):
-        for event in pygame.event.get():
-            if event.type == CONTINUOUS_ACTION:
-                magnitude, degree = event.value[1]
-                self.force_applied = pol2cart(magnitude, degree)
+        box2 = Box(
+            x=55,
+            y=85,
+            width=10,
+            height=10,
+            mass=100,
+            color=(.55, .2, .2),
+            friction=0.1,
+        )
+
+        bouncy_box = Box(
+            x=75,
+            y=85,
+            width=10,
+            height=10,
+            mass=100,
+            color=(.4, .7, 1),
+            friction=0.1,
+            bounciness=0.8,
+        )
+
+        player.vel = player.vel + [0, 0.01]
+        box1.vel = box1.vel + [0.0, -0.01]
+        box2.vel = box2.vel + [0.0, -0.01]
+        bouncy_box.vel = bouncy_box.vel + [0.03, -0.01]
+
+        self.boxes.append(box1)
+        self.boxes.append(box2)
+        self.boxes.append(bouncy_box)
+        self.boxes.append(player)
+
+        # Add walls
+        self.boxes.append(Box(
+            x=0,
+            y=50,
+            width=2,
+            height=100,
+            movable=False,
+            friction=0.01,
+        ))
+        self.boxes.append(Box(
+            x=100,
+            y=50,
+            width=2,
+            height=100,
+            movable=False,
+            friction=0.01,
+        ))
+        self.boxes.append(Box(
+            x=50,
+            y=0,
+            width=100,
+            height=2,
+            movable=False,
+            friction=0.01,
+        ))
+        self.boxes.append(Box(
+            x=50,
+            y=100,
+            width=100,
+            height=2,
+            movable=False,
+            friction=0.01,
+        ))
+        self.boxes.append(Box(
+            x=30,
+            y=60,
+            width=30,
+            height=30,
+            movable=False,
+            friction=0.01,
+        ))
+
+        self.teleporter_pairs = []
+        self.teleporter_pairs.append(TeleporterPair(
+            7, 7, 15, 15,
+            70, 7, 15, 15,
+        ))
 
     @staticmethod
     def _check_rect_collision(center1, half_length1, movable1, center2, half_length2, movable2):
@@ -314,168 +342,175 @@ class BoxPush(base.PyGameWrapper):
                             teleporter.ports[(p + 1) % 2].empty = False
                             break
 
-    def init(self):
-        self.boxes = []
 
-        player = Box(
-            x=50,
-            y=15,
-            width=10,
-            height=10,
-            mass=100,
-            color=(0, 255, 0),
-            friction=0.1,
-            SCREEN_WIDTH=self.width,
-            SCREEN_HEIGHT=self.height,
-            is_controlled=True
-        )
+    def step(self, action):
+        self._handle_physics(66)
 
-        box1 = Box(
-            x=45,
-            y=83,
-            width=10,
-            height=10,
-            mass=100,
-            color=(140, 50, 50),
-            friction=0.1,
-            SCREEN_WIDTH=self.width,
-            SCREEN_HEIGHT=self.height
-        )
+        # self.state = self.render("state_pixels")
+        state = None
+        reward = 0
+        done = False
 
-        box2 = Box(
-            x=55,
-            y=85,
-            width=10,
-            height=10,
-            mass=100,
-            color=(140, 50, 50),
-            friction=0.1,
-            SCREEN_WIDTH=self.width,
-            SCREEN_HEIGHT=self.height
-        )
+        return state, reward, done, {}
 
-        bouncy_box = Box(
-            x=75,
-            y=85,
-            width=10,
-            height=10,
-            mass=100,
-            color=(100, 180, 250),
-            friction=0.1,
-            bounciness=0.8,
-            SCREEN_WIDTH=self.width,
-            SCREEN_HEIGHT=self.height
-        )
+    def render(self, mode='human'):
 
-        player.vel = player.vel + [0, 0.01]
-        box1.vel = box1.vel + [0.0, -0.01]
-        box2.vel = box2.vel + [0.0, -0.01]
-        bouncy_box.vel = bouncy_box.vel + [0.03, -0.01]
+        if self.viewer is None:
+            import pyglet
+            from pyglet import gl
+            from gym.envs.classic_control import rendering
 
-        self.boxes.append(box1)
-        self.boxes.append(box2)
-        self.boxes.append(bouncy_box)
-        self.boxes.append(player)
+            self.pyglet = pyglet
+            self.gl = gl
 
-        # Add walls
-        self.boxes.append(Box(
-            x=0,
-            y=50,
-            width=2,
-            height=100,
-            movable=False,
-            friction=0.01,
-            SCREEN_WIDTH=self.width,
-            SCREEN_HEIGHT=self.height
-        ))
-        self.boxes.append(Box(
-            x=100,
-            y=50,
-            width=2,
-            height=100,
-            movable=False,
-            friction=0.01,
-            SCREEN_WIDTH=self.width,
-            SCREEN_HEIGHT=self.height
-        ))
-        self.boxes.append(Box(
-            x=50,
-            y=0,
-            width=100,
-            height=2,
-            movable=False,
-            friction=0.01,
-            SCREEN_WIDTH=self.width,
-            SCREEN_HEIGHT=self.height
-        ))
-        self.boxes.append(Box(
-            x=50,
-            y=100,
-            width=100,
-            height=2,
-            movable=False,
-            friction=0.01,
-            SCREEN_WIDTH=self.width,
-            SCREEN_HEIGHT=self.height
-        ))
-        self.boxes.append(Box(
-            x=30,
-            y=60,
-            width=30,
-            height=30,
-            movable=False,
-            friction=0.01,
-            SCREEN_WIDTH=self.width,
-            SCREEN_HEIGHT=self.height
-        ))
+            self.viewer = rendering.Viewer(WINDOW_W, WINDOW_H)
+            for tp in self.teleporter_pairs:
+                for teleporter in tp.ports:
+                    r = teleporter.length[0] / 2
+                    t = teleporter.length[1] / 2
+                    l, b = -r, -t
+                    teleporter.geom = rendering.FilledPolygon([(l, b), (l, t), (r, t), (r, b)])
+                    teleporter.transform = rendering.Transform()
+                    teleporter.transform.set_translation(percent_round_int(teleporter.center[0], WINDOW_W),
+                                                         percent_round_int(teleporter.center[1], WINDOW_H))
+                    teleporter.transform.set_scale(WINDOW_W / 100, WINDOW_H / 100)
+                    teleporter.geom.add_attr(teleporter.transform)
+                    teleporter.geom.set_color(1, .8, .8)
+                    self.viewer.add_geom(teleporter.geom)
+            for box in self.boxes:
+                r = box.length[0] / 2
+                t = box.length[1] / 2
+                l, b = -r, -t
+                box.geom = rendering.FilledPolygon([(l, b), (l, t), (r, t), (r, b)])
+                box.transform = rendering.Transform()
+                box.transform.set_scale(WINDOW_W / 100, WINDOW_H / 100)
+                box.geom.add_attr(box.transform)
+                box.geom.set_color(*box.color)
+                self.viewer.add_geom(box.geom)
 
-        self.teleporter_pairs = []
-        self.teleporter_pairs.append(TeleporterPair(
-            7, 7, 15, 15,
-            70, 7, 15, 15,
-            self.width, self.height
-        ))
+            # self.transform = rendering.Transform()
 
-    def getGameState(self):
-        raise NotImplementedError
-
-    def getScore(self):
-        return 0
-
-    def game_over(self):
-        return False
-
-    def step(self, dt):
-        self.screen.fill((255, 255, 255))
-        self._handle_player_events()
-
-        self.score += self.rewards["tick"]
-
-        self._handle_physics(dt)
-
-        for teleporters in self.teleporter_pairs:
-            teleporters.draw(self.screen)
+            # platform = pyglet.window.get_platform()
+            # display = platform.get_default_display()
+            # screen = display.get_default_screen()
+            #
+            # config = None
+            # for template_config in [
+            #     gl.Config(double_buffer=True, depth_size=24),
+            #     gl.Config(double_buffer=True, depth_size=16),
+            #     None]:
+            #     try:
+            #         config = screen.get_best_config(template_config)
+            #         break
+            #     except NoSuchConfigException:
+            #         pass
+            # if not config:
+            #     raise NoSuchConfigException('No standard config is available.')
+            #
+            # if not config.is_complete():
+            #     config = screen.get_best_config(config)
+            #
+            # self.state_pixels_context = config.create_context(gl.current_context)
 
         for box in self.boxes:
-            box.draw(self.screen)
+            box.transform.set_translation(percent_round_int(box.center[0], WINDOW_W),
+                                          percent_round_int(box.center[1], WINDOW_H))
 
-        if self.lives == 0:
-            self.score += self.rewards["loss"]
+        scale = (1,1)
 
-#
-# if __name__ == "__main__":
-#
-#     pygame.init()
-#     game = BoxPush(width=256, height=256)
-#     game.rng = np.random.RandomState(24)
-#     game.screen = pygame.display.set_mode(game.getScreenDims(), 0, 32)
-#     game.clock = pygame.time.Clock()
-#     game.init()
-#
-#     while True:
-#         dt = game.clock.tick_busy_loop(30)
-#         if game.game_over():
-#             game.reset()
-#
-#         game.step(dt)
-#         pygame.display.update()
+        # self.transform.set_scale(*scale)
+
+        arr = None
+        win = self.viewer.window
+        pyglet = self.pyglet
+        gl = self.gl
+        self.gl.glClearColor(1, 1, 1, 1)
+
+        win.switch_to()
+        win.dispatch_events()
+
+        if not self.human_render and mode != 'human':
+            win.set_visible(False)
+
+        if mode == "rgb_array" or mode == "state_pixels":
+            gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
+            # t = self.transform
+            if mode == 'rgb_array':
+                VP_W = WINDOW_W
+                VP_H = WINDOW_H
+            else:
+                VP_W = STATE_W
+                VP_H = STATE_H
+            gl.glViewport(0, 0, VP_W, VP_H)
+            # t.enable()
+            for geom in self.viewer.geoms:
+                geom.render()
+            # t.disable()
+            image_data = pyglet.image.get_buffer_manager().get_color_buffer().get_image_data()
+            arr = np.fromstring(image_data.data, dtype=np.uint8, sep='')
+            arr = arr.reshape(VP_H, VP_W, 4)
+            arr = arr[::-1, :, 0:3]
+
+        if mode == "rgb_array" and not self.human_render:  # agent can call or not call env.render() itself when recording video.
+            win.flip()
+
+        if mode == 'human':
+            self.human_render = True
+            win.clear()
+            # t = self.transform
+            gl.glViewport(0, 0, WINDOW_W, WINDOW_H)
+            # t.enable()
+            for geom in self.viewer.geoms:
+                geom.render()
+            # t.disable()
+            win.flip()
+
+
+        return arr
+
+    def close(self):
+        if self.viewer:
+            self.viewer.close()
+
+    def reset(self):
+        self.reset_state()
+
+    #
+    # def render(self, mode='human'):
+    #     if self.viewer is None:
+    #         from gym.envs.classic_control import rendering
+    #         self.viewer = rendering.Viewer(WINDOW_W, WINDOW_H)
+    #         for tp in self.teleporter_pairs:
+    #             for teleporter in tp.ports:
+    #                 r = teleporter.length[0] / 2
+    #                 t = teleporter.length[1] / 2
+    #                 l, b = -r, -t
+    #                 teleporter.geom = rendering.FilledPolygon([(l, b), (l, t), (r, t), (r, b)])
+    #                 teleporter.transform = rendering.Transform()
+    #                 teleporter.transform.set_translation(percent_round_int(teleporter.center[0], WINDOW_W),
+    #                                                      percent_round_int(teleporter.center[1], WINDOW_H))
+    #                 teleporter.geom.add_attr(teleporter.transform)
+    #                 teleporter.geom.set_color(1, .8, .8)
+    #                 self.viewer.add_geom(teleporter.geom)
+    #         for box in self.boxes:
+    #             r = box.length[0] / 2
+    #             t = box.length[1] / 2
+    #             l, b = -r, -t
+    #             box.geom = rendering.FilledPolygon([(l, b), (l, t), (r, t), (r, b)])
+    #             box.transform = rendering.Transform()
+    #             box.geom.add_attr(box.transform)
+    #             box.geom.set_color(*box.color)
+    #             self.viewer.add_geom(box.geom)
+    #
+    #     # if "t" not in self.__dict__: return  # reset() not called yet
+    #
+    #     for box in self.boxes:
+    #         box.transform.set_translation(percent_round_int(box.center[0], WINDOW_W),
+    #                                       percent_round_int(box.center[1], WINDOW_H))
+    #         box.transform.set_scale(WINDOW_W/100, WINDOW_H/100)
+    #
+    #     for tp in self.teleporter_pairs:
+    #         for teleporter in tp.ports:
+    #             teleporter.transform.set_scale(WINDOW_W/100, WINDOW_H/100)
+    #
+    #     return self.viewer.render(return_rgb_array=mode == 'rgb_array')

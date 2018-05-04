@@ -1,10 +1,9 @@
-from boxpush import BoxPush
-from continousple import ContinousPLE
-import pygame
 import math
 import numpy as np
 import cv2
 import time
+import multiprocessing
+from boxpush import BoxPush
 
 
 def cart2pol(x, y):
@@ -13,47 +12,72 @@ def cart2pol(x, y):
     return (rho, phi)
 
 
-game = BoxPush(display_width=100, display_height=100)
-p = ContinousPLE(game, fps=30, display_screen=True, add_noop_action=False)
+def render_loop():
 
-p.init()
-reward = 0.0
+    env = BoxPush()
+    env.reset()
 
-pygame.joystick.init()
+    while True:
+        env.step([0, 0])
+        frame = env.render("human")
 
-joystick = pygame.joystick.Joystick(0)
-joystick.init()
+        frame = env.render("state_pixels")
+        cv2.imshow("state_pixels", frame[:, :, ::-1])
+        cv2.waitKey(1)
 
-test_image_shown = False
+    env.close()
 
-while True:
-    frame_start_time = time.time()
 
-    if p.game_over():
-        p.reset_game()
 
-    x = joystick.get_axis(0)
-    y = joystick.get_axis(1)
 
-    # print("X,Y: ({},{})".format(x,y))
-    r, phi = cart2pol(x, y)
 
-    if abs(r) < 0.12:
-        r = 0
-    else:
-        r = min(1, r)
-        r = r + 0.12 * math.log(r)
-        r = r * 0.30
+for i in range (1):
+    p = multiprocessing.Process(target=render_loop)
+    p.start()
 
-    # print("r,phi: ({},{})".format(r,phi))
 
-    observation = p.getScreenRGB()
 
-    # if not test_image_shown:
-    # 	cv2.imshow("obs", observation)
-    # 	cv2.waitKey(1)
 
-    action = (0, (r, phi))
-    reward = p.act(action)
 
-    time.sleep((15.4444444 - (time.time() - frame_start_time)) * 0.001)
+#
+# p.init()
+# reward = 0.0
+#
+# pygame.joystick.init()
+#
+# joystick = pygame.joystick.Joystick(0)
+# joystick.init()
+#
+# test_image_shown = False
+#
+# while True:
+#     frame_start_time = time.time()
+#
+#     if p.game_over():
+#         p.reset_game()
+#
+#     x = joystick.get_axis(0)
+#     y = joystick.get_axis(1)
+#
+#     # print("X,Y: ({},{})".format(x,y))
+#     r, phi = cart2pol(x, y)
+#
+#     if abs(r) < 0.12:
+#         r = 0
+#     else:
+#         r = min(1, r)
+#         r = r + 0.12 * math.log(r)
+#         r = r * 0.30
+#
+#     # print("r,phi: ({},{})".format(r,phi))
+#
+#     observation = p.getScreenRGB()
+#
+#     # if not test_image_shown:
+#     # 	cv2.imshow("obs", observation)
+#     # 	cv2.waitKey(1)
+#
+#     action = (0, (r, phi))
+#     reward = p.act(action)
+#
+#     time.sleep((15.4444444 - (time.time() - frame_start_time)) * 0.001)

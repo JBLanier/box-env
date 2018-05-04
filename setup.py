@@ -7,23 +7,23 @@ here = os.path.abspath(os.path.dirname(__file__))
 
 install_requires = [
     "numpy",
-    "ple",
-    "pygame"
+    "gym",
+    "pyglet"
 ]
 
 setup(
-	name='boxenv',
-	version='0.0.1',
-	description='PyGame Box Learning Environment',
+    name='boxenv',
+    version='0.0.1',
+    description='Open AI gym for continous control',
     classifiers=[
         "Intended Audience :: Science/Research"
     ],
-	url='https://github.com/JBLanier/box-env',
-	author='J.B. Lanier',
-	author_email='jblanier@uci.edu',
-	keywords='',
-	packages=find_packages(),
-        include_package_data=False,
-        zip_safe=False,
-        install_requires=install_requires
+    url='https://github.com/JBLanier/box-env',
+    author='J.B. Lanier',
+    author_email='jblanier@uci.edu',
+    keywords='',
+    packages=find_packages(),
+    include_package_data=False,
+    zip_safe=False,
+    install_requires=install_requires
 )
