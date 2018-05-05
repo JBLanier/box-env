@@ -14,7 +14,7 @@ install_requires = [
 setup(
     name='boxenv',
     version='0.0.1',
-    description='Open AI gym for continous control',
+    description='Open AI gym for continuous control',
     classifiers=[
         "Intended Audience :: Science/Research"
     ],

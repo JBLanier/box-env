@@ -1,4 +1,5 @@
 import numpy as np
+from math import pi
 import gym
 # import sys
 #
@@ -8,6 +9,8 @@ import gym
 # pyglet.options['shadow_window'] = False
 
 FPS = 30
+
+PHYSICS_DELTA_TIME = 66
 
 STATE_W = 64
 STATE_H = 64
@@ -20,8 +23,8 @@ def percent_round_int(percent, x):
 
 
 def pol2cart(rho, phi):
-    x = rho * np.cos(phi)
-    y = rho * np.sin(phi)
+    x = rho * np.cos(phi * pi)
+    y = rho * np.sin(phi * pi)
 
     # print("r:{}, phi: {}, x: {}, Y: {}".format(rho, phi, x,y))
     return np.asarray([x, y])
@@ -87,7 +90,7 @@ class Box():
                 force += gravitational_force[axis]
 
             accel = force / self.mass
-            accel = accel * 0.01
+            accel = accel * 0.001
 
             # print("accel: {}".format(accel))
             new_vel[axis] = new_vel[axis] + (accel * dt)
@@ -110,7 +113,7 @@ class Box():
 
 class BoxPush(gym.Env):
     metadata = {
-        'render.modes': ['human', 'rgb_array'],
+        'render.modes': ['human', 'rgb_array', 'state_pixels'],
         'video.frames_per_second': FPS
     }
 
@@ -126,6 +129,11 @@ class BoxPush(gym.Env):
         self.state_pixels_context = None
         self.human_render = False
 
+        self.force_applied = None
+        self.boxes = None
+        self.teleporter_pairs = None
+
+
         self.reset_state()
 
     def reset_state(self):
@@ -135,7 +143,7 @@ class BoxPush(gym.Env):
 
         player = Box(
             x=50,
-            y=15,
+            y=85,
             width=10,
             height=10,
             mass=100,
@@ -146,7 +154,7 @@ class BoxPush(gym.Env):
 
         box1 = Box(
             x=45,
-            y=83,
+            y=17,
             width=10,
             height=10,
             mass=100,
@@ -155,8 +163,8 @@ class BoxPush(gym.Env):
         )
 
         box2 = Box(
-            x=55,
-            y=85,
+            x=56,
+            y=15,
             width=10,
             height=10,
             mass=100,
@@ -166,7 +174,7 @@ class BoxPush(gym.Env):
 
         bouncy_box = Box(
             x=75,
-            y=85,
+            y=15,
             width=10,
             height=10,
             mass=100,
@@ -175,10 +183,10 @@ class BoxPush(gym.Env):
             bounciness=0.8,
         )
 
-        player.vel = player.vel + [0, 0.01]
-        box1.vel = box1.vel + [0.0, -0.01]
-        box2.vel = box2.vel + [0.0, -0.01]
-        bouncy_box.vel = bouncy_box.vel + [0.03, -0.01]
+        player.vel = player.vel + [0, -0.01]
+        box1.vel = box1.vel + [0.0, 0.01]
+        box2.vel = box2.vel + [0.0, 0.01]
+        bouncy_box.vel = bouncy_box.vel + [0.03, 0.01]
 
         self.boxes.append(box1)
         self.boxes.append(box2)
@@ -229,8 +237,8 @@ class BoxPush(gym.Env):
 
         self.teleporter_pairs = []
         self.teleporter_pairs.append(TeleporterPair(
-            7, 7, 15, 15,
-            70, 7, 15, 15,
+            7, 93, 15, 15,
+            70, 93, 15, 15,
         ))
 
     @staticmethod
@@ -342,12 +350,14 @@ class BoxPush(gym.Env):
                             teleporter.ports[(p + 1) % 2].empty = False
                             break
 
-
     def step(self, action):
-        self._handle_physics(66)
+        assert self.action_space.contains(action)
 
-        # self.state = self.render("state_pixels")
-        state = None
+        self.force_applied = pol2cart(*action)
+
+        self._handle_physics(PHYSICS_DELTA_TIME)
+
+        state = self.render("state_pixels")
         reward = 0
         done = False
 

@@ -1,9 +1,9 @@
-import math
-import numpy as np
-import cv2
-import time
 import multiprocessing
-from boxpush import BoxPush
+
+import cv2
+import numpy as np
+
+from gym_boxpush.envs.boxpush import BoxPush
 
 
 def cart2pol(x, y):
@@ -13,27 +13,27 @@ def cart2pol(x, y):
 
 
 def render_loop():
-
     env = BoxPush()
     env.reset()
 
     while True:
-        env.step([0, 0])
-        frame = env.render("human")
+        action = env.action_space.sample()
 
-        frame = env.render("state_pixels")
+        env.render("human")
+        frame, _, _, _ = env.step(action)
         cv2.imshow("state_pixels", frame[:, :, ::-1])
         cv2.waitKey(1)
 
     env.close()
 
 
+if __name__ == '__main__':
+    multiprocessing.set_start_method('spawn')
 
-
-
-for i in range (1):
-    p = multiprocessing.Process(target=render_loop)
-    p.start()
+    for i in range(1):
+        p = multiprocessing.Process(target=render_loop)
+        print("1")
+        p.start()
 
 
 
