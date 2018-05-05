@@ -12,7 +12,7 @@ install_requires = [
 ]
 
 setup(
-    name='boxenv',
+    name='gym-boxpush',
     version='0.0.1',
     description='Open AI gym for continuous control',
     classifiers=[
