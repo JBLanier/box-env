@@ -117,7 +117,7 @@ class BoxPush(gym.Env):
         'video.frames_per_second': FPS
     }
 
-    def __init__(self, display_width=500, display_height=500):
+    def __init__(self):
         self.action_space = gym.spaces.Box( np.array([0, -1]), np.array([+1, +1]), dtype=np.float32)  # force magnitude and direction
 
         self.observation_space = gym.spaces.Box(low=0, high=255, shape=(STATE_H, STATE_W, 3), dtype=np.uint8)
@@ -154,7 +154,7 @@ class BoxPush(gym.Env):
 
         box1 = Box(
             x=45,
-            y=17,
+            y=15,
             width=10,
             height=10,
             mass=100,
@@ -163,7 +163,7 @@ class BoxPush(gym.Env):
         )
 
         box2 = Box(
-            x=56,
+            x=55,
             y=15,
             width=10,
             height=10,
@@ -442,6 +442,9 @@ class BoxPush(gym.Env):
 
         if not self.human_render and mode != 'human':
             win.set_visible(False)
+        elif not self.human_render and mode == 'human':
+            self.human_render = True
+            win.set_visible(True)
 
         if mode == "rgb_array" or mode == "state_pixels":
             gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
@@ -466,7 +469,6 @@ class BoxPush(gym.Env):
             win.flip()
 
         if mode == 'human':
-            self.human_render = True
             win.clear()
             # t = self.transform
             gl.glViewport(0, 0, WINDOW_W, WINDOW_H)
@@ -476,15 +478,23 @@ class BoxPush(gym.Env):
             # t.disable()
             win.flip()
 
-
         return arr
 
     def close(self):
         if self.viewer:
             self.viewer.close()
 
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+
+    def __del__(self):
+        self.close()
+
     def reset(self):
         self.reset_state()
+        self.close()
+        self.viewer = None
+        return self.render('state_pixels')
 
     #
     # def render(self, mode='human'):
