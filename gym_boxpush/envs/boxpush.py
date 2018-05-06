@@ -90,7 +90,7 @@ class Box():
                 force += gravitational_force[axis]
 
             accel = force / self.mass
-            accel = accel * 0.001
+            accel = accel * 0.0004
 
             # print("accel: {}".format(accel))
             new_vel[axis] = new_vel[axis] + (accel * dt)
@@ -351,6 +351,7 @@ class BoxPush(gym.Env):
                             break
 
     def step(self, action):
+        # print(action)
         assert self.action_space.contains(action)
 
         self.force_applied = pol2cart(*action)
