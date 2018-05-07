@@ -369,12 +369,13 @@ class BoxPush(gym.Env):
         if self.viewer is None:
             import pyglet
             from pyglet import gl
-            from gym.envs.classic_control import rendering
+            from gym_boxpush.envs import rendering
 
             self.pyglet = pyglet
             self.gl = gl
 
             self.viewer = rendering.Viewer(WINDOW_W, WINDOW_H)
+
             for tp in self.teleporter_pairs:
                 for teleporter in tp.ports:
                     r = teleporter.length[0] / 2
@@ -440,9 +441,9 @@ class BoxPush(gym.Env):
         win.switch_to()
         win.dispatch_events()
 
-        if not self.human_render and mode != 'human':
-            win.set_visible(False)
-        elif not self.human_render and mode == 'human':
+        # if not self.human_render and mode != 'human':
+        #     win.set_visible(False)
+        if mode == 'human' and not self.human_render:
             self.human_render = True
             win.set_visible(True)
 
