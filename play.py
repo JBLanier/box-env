@@ -3,7 +3,9 @@ import multiprocessing
 import cv2
 import numpy as np
 
+import gym
 from gym_boxpush.envs.boxpush import BoxPush
+from gym_boxpush.envs.boxpushsimple import BoxPushSimple
 
 
 def cart2pol(x, y):
@@ -13,17 +15,24 @@ def cart2pol(x, y):
 
 
 def render_loop():
-    env = BoxPush()
+    env = gym.make('boxpushmaze-v0')
     env.reset()
 
+    frames = 0
     while True:
-        action = env.action_space.sample()
+        if frames > 2000:
+            frames = 0
+            env.reset()
+            print("reset")
 
+        action = env.action_space.sample()
+        # action = np.asarray([0,0])
         env.render("human")
         frame, _, _, _ = env.step(action)
         cv2.imshow("state_pixels", frame[:, :, ::-1])
         cv2.waitKey(1)
 
+        frames += 1
     env.close()
 
 
