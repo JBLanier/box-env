@@ -1,6 +1,9 @@
 import numpy as np
 from math import pi
 import gym
+from PIL import Image
+import os
+
 # import sys
 #
 # import pyglet
@@ -132,16 +135,59 @@ class BoxPush(gym.Env):
         self.force_applied = None
         self.boxes = None
         self.teleporter_pairs = None
+        self.player = None
 
+        self.location_record = None
+        self.record_write_dir = None
+        self.record_write_prefix = None
+        self.record_write_file_number = 0
+        self.record_write_steps_recorded = 0
+        self.record_write_max_steps = 2000
 
         self.reset_state()
+
+    def set_record_write(self, write_dir, prefix):
+        if not os.path.exists(write_dir):
+            os.makedirs(write_dir, exist_ok=True)
+
+        self.flush_record_write()
+        if not self.record_write_dir:
+            self.save_heatmap_picture(os.path.join(write_dir,'level.png'))
+        self.record_write_dir = write_dir
+        self.record_write_prefix = prefix
+        self.record_write_file_number = 0
+
+
+    def flush_record_write(self, create_new_record=True):
+        if self.location_record is not None:
+            write_file = os.path.join(self.record_write_dir,"{}_{}".format(self.record_write_prefix,
+                                                                           self.record_write_file_number))
+            np.save(write_file, self.location_record[:self.record_write_steps_recorded])
+            self.record_write_file_number += 1
+            self.record_write_steps_recorded = 0
+
+        if create_new_record:
+            self.location_record = np.empty(shape=(self.record_write_max_steps, 2), dtype=np.float32)
+
+    def log_location(self):
+        if self.location_record is not None:
+            self.location_record[self.record_write_steps_recorded] = self.player.center
+            self.record_write_steps_recorded += 1
+
+            if self.record_write_steps_recorded >= self.record_write_max_steps:
+                self.flush_record_write()
+
+    def save_heatmap_picture(self, filename):
+        background_picture_np = self.debug_show_player_at_location(location_x=10000)
+        im = Image.fromarray(background_picture_np)
+        im.save(filename)
 
     def reset_state(self):
         self.force_applied = np.asarray([0.0, 0.0])
 
         self.boxes = []
 
-        player = Box(
+        self.player = Box(
             x=50,
             y=85,
             width=10,
@@ -183,7 +229,7 @@ class BoxPush(gym.Env):
             bounciness=0.8,
         )
 
-        player.vel = player.vel + [0, -0.01]
+        self.player.vel = player.vel + [0, -0.01]
         box1.vel = box1.vel + [0.0, 0.01]
         box2.vel = box2.vel + [0.0, 0.01]
         bouncy_box.vel = bouncy_box.vel + [0.03, 0.01]
@@ -191,7 +237,7 @@ class BoxPush(gym.Env):
         self.boxes.append(box1)
         self.boxes.append(box2)
         self.boxes.append(bouncy_box)
-        self.boxes.append(player)
+        self.boxes.append(self.player)
 
         # Add walls
         self.boxes.append(Box(
@@ -356,6 +402,8 @@ class BoxPush(gym.Env):
 
         self.force_applied = pol2cart(*action)
 
+        self.log_location()
+
         self._handle_physics(PHYSICS_DELTA_TIME)
 
         state = self.render("state_pixels")
@@ -485,17 +533,37 @@ class BoxPush(gym.Env):
         if self.viewer:
             self.viewer.close()
 
+
     def __exit__(self, exc_type, exc_value, traceback):
         self.close()
+        self.flush_record_write(create_new_record=False)
 
     def __del__(self):
         self.close()
+        self.flush_record_write(create_new_record=False)
 
     def reset(self):
         self.reset_state()
         self.close()
         self.viewer = None
         return self.render('state_pixels')
+
+    def debug_show_player_at_location(self, location_x):
+        """
+        Returns rendering of player at specified location, does not affect actual game state.
+        :param location_x: (float -1 to 1) show player at location_x
+        :return: "state_pixels" rendering with player at location_x
+        """
+        old_center = np.copy(self.player.center)
+        self.player.center[0] = (location_x + 1) * 50
+        frame = self.render("state_pixels")
+        self.player.center = old_center
+        return frame
+
+    def debug_get_player_location(self):
+        return (self.player.center[0] - 50) / 50
+
+
 
     #
     # def render(self, mode='human'):

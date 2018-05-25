@@ -66,6 +66,9 @@ class BoxPushSimple(BoxPush):
 
         self.force_applied = pol2cart(*action)
 
+        self.log_location()
+
+
         self._handle_physics(PHYSICS_DELTA_TIME * 6)
         self._handle_physics(PHYSICS_DELTA_TIME * 6)
 
@@ -76,17 +79,3 @@ class BoxPushSimple(BoxPush):
 
         return state, reward, done, {}
 
-    def debug_show_player_at_location(self, location_x):
-        """
-        Returns rendering of player at specified location, does not affect actual game state.
-        :param location_x: (float -1 to 1) show player at location_x
-        :return: "state_pixels" rendering with player at location_x
-        """
-        old_center = np.copy(self.player.center)
-        self.player.center[0] = (location_x + 1) * 50
-        frame = self.render("state_pixels")
-        self.player.center = old_center
-        return frame
-
-    def debug_get_player_location(self):
-        return (self.player.center[0] - 50) / 50

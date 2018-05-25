@@ -102,6 +102,9 @@ class BoxPushMaze(BoxPush):
 
         self.force_applied = pol2cart(*action)
 
+        self.log_location()
+
+
         self._handle_physics(PHYSICS_DELTA_TIME * 1.5)
 
         state = self.render("state_pixels")

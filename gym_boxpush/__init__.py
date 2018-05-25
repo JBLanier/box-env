@@ -14,4 +14,3 @@ register(
     id='boxpushmaze-v0',
     entry_point='gym_boxpush.envs:BoxPushMaze',
 )
-

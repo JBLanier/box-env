@@ -17,10 +17,12 @@ def cart2pol(x, y):
 def render_loop():
     env = gym.make('boxpushmaze-v0')
     env.reset()
+    env.set_record_write("cool","1")
 
     frames = 0
     while True:
-        if frames > 2000:
+        if frames > 3000:
+            env.set_record_write("cool", str(frames))
             frames = 0
             env.reset()
             print("reset")
@@ -33,6 +35,7 @@ def render_loop():
         cv2.waitKey(1)
 
         frames += 1
+        print(frames)
     env.close()
 
 
