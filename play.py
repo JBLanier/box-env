@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 
 import gym
+import gym_boxpush
 from gym_boxpush.envs.boxpush import BoxPush
 from gym_boxpush.envs.boxpushsimple import BoxPushSimple
 
@@ -15,14 +16,14 @@ def cart2pol(x, y):
 
 
 def render_loop():
-    env = gym.make('boxpushmaze-v0')
+    env = gym.make('boxpushsimple-colorchange-v0')
     env.reset()
-    env.set_record_write("cool","1")
+    # env.set_record_write("cool","1")
 
     frames = 0
     while True:
         if frames > 3000:
-            env.set_record_write("cool", str(frames))
+            # env.set_record_write("cool", str(frames))
             frames = 0
             env.reset()
             print("reset")

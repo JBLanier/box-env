@@ -2,7 +2,7 @@ import numpy as np
 from math import pi
 from gym_boxpush.envs.boxpush import *
 
-class BoxPushSimple(BoxPush):
+class BoxPushSimpleColorChange(BoxPush):
 
     def reset_state(self):
         self.force_applied = np.asarray([0.0, 0.0])
@@ -60,3 +60,16 @@ class BoxPushSimple(BoxPush):
             friction=0.01,
         ))
 
+    def step(self, action):
+        if action[0] == 1:
+            self.player.color = (1, 0, 0)
+        else:
+            self.player.color = (0, 1, 0)
+
+        return super(BoxPushSimpleColorChange, self).step(action)
+
+    def render(self, mode='human'):
+        if self.viewer is not None:
+            for box in self.boxes:
+                box.geom.set_color(*box.color)
+        return super(BoxPushSimpleColorChange, self).render(mode=mode)

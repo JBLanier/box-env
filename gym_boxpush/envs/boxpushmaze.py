@@ -96,24 +96,6 @@ class BoxPushMaze(BoxPush):
             friction=0.01,
         ))
 
-    def step(self, action):
-        # print("ACTION: {}".format(action))
-        assert self.action_space.contains(action)
-
-        self.force_applied = pol2cart(*action)
-
-        self.log_location()
-
-
-        self._handle_physics(PHYSICS_DELTA_TIME * 1.5)
-
-        state = self.render("state_pixels")
-        reward = 0
-
-        done = False
-
-        return state, reward, done, {}
-
     def debug_show_player_at_location(self, location_x):
         """
         Returns rendering of player at specified location, does not affect actual game state.

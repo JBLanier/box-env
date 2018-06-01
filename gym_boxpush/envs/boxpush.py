@@ -3,6 +3,7 @@ from math import pi
 import gym
 from PIL import Image
 import os
+import random
 
 # import sys
 #
@@ -11,14 +12,15 @@ import os
 
 # pyglet.options['shadow_window'] = False
 
-FPS = 30
+FPS = 300
 
-PHYSICS_DELTA_TIME = 66
+PHYSICS_DELTA_TIME = 300
+ACTIONS = [[0, 0], [1, 0], [1, 0.5], [1, -0.5], [1, 1]]
 
 STATE_W = 64
 STATE_H = 64
-WINDOW_W = 500
-WINDOW_H = 500
+WINDOW_W = 64
+WINDOW_H = 64
 
 
 def percent_round_int(percent, x):
@@ -120,10 +122,13 @@ class BoxPush(gym.Env):
         'video.frames_per_second': FPS
     }
 
-    def __init__(self):
-        self.action_space = gym.spaces.Box( np.array([0, -1]), np.array([+1, +1]), dtype=np.float32)  # force magnitude and direction
+    def __init__(self,  max_episode_length=2000):
+        # self.action_space = gym.spaces.Box( np.array([0, -1]), np.array([+1, +1]), dtype=np.float32)  # force magnitude and direction
+        self.action_space = gym.spaces.Discrete(5)
 
         self.observation_space = gym.spaces.Box(low=0, high=255, shape=(STATE_H, STATE_W, 3), dtype=np.uint8)
+
+        self.max_episode_length = max_episode_length
 
         self.pyglet = None
         self.gl = None
@@ -157,9 +162,11 @@ class BoxPush(gym.Env):
         self.record_write_prefix = prefix
         self.record_write_file_number = 0
 
+        return True
+
 
     def flush_record_write(self, create_new_record=True):
-        if self.location_record is not None:
+        if self.location_record is not None and self.record_write_steps_recorded > 0:
             write_file = os.path.join(self.record_write_dir,"{}_{}".format(self.record_write_prefix,
                                                                            self.record_write_file_number))
             np.save(write_file, self.location_record[:self.record_write_steps_recorded])
@@ -184,7 +191,6 @@ class BoxPush(gym.Env):
 
     def reset_state(self):
         self.force_applied = np.asarray([0.0, 0.0])
-
         self.boxes = []
 
         self.player = Box(
@@ -400,17 +406,23 @@ class BoxPush(gym.Env):
         # print(action)
         assert self.action_space.contains(action)
 
-        self.force_applied = pol2cart(*action)
+        self.force_applied = pol2cart(*ACTIONS[action])
 
         self.log_location()
+
 
         self._handle_physics(PHYSICS_DELTA_TIME)
 
         state = self.render("state_pixels")
-        reward = 0
-        done = False
 
-        return state, reward, done, {}
+        reward = 0
+
+        self.current_step +=1
+        if self.current_step >= 2 and (self.current_step >= self.max_episode_length or
+                                       random.random() < 1/self.max_episode_length):
+            self.done = True
+
+        return state, reward, self.done, {}
 
     def render(self, mode='human'):
 
@@ -543,6 +555,8 @@ class BoxPush(gym.Env):
         self.flush_record_write(create_new_record=False)
 
     def reset(self):
+        self.current_step = 0
+        self.done = False
         self.reset_state()
         self.close()
         self.viewer = None
