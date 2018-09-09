@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 
 import gym
+import pygame
 import gym_boxpush
 from gym_boxpush.envs.boxpush import BoxPush
 from gym_boxpush.envs.boxpushsimple import BoxPushSimple
@@ -16,27 +17,47 @@ def cart2pol(x, y):
 
 
 def render_loop():
-    env = gym.make('boxpushsimple-colorchange-v0')
+    pygame.init()
+    pygame.joystick.init()
+    joystick = pygame.joystick.Joystick(0)
+    joystick.init()
+
+    env = gym.make('boxpush-v0')
     env.reset()
     # env.set_record_write("cool","1")
 
     frames = 0
     while True:
-        if frames > 3000:
-            # env.set_record_write("cool", str(frames))
-            frames = 0
-            env.reset()
-            print("reset")
 
-        action = env.action_space.sample()
-        # action = np.asarray([0,0])
+        # action = env.action_space.sample()
+        pygame.event.get()
+        x = joystick.get_axis(0)
+        y = joystick.get_axis(1) * -1
+
+        deadzone = 0.2
+
+        if abs(x) < deadzone:
+            x = 0
+        if abs(y) < deadzone:
+            y = 0
+
+        action = np.asarray([x, y])
+
         env.render("human")
-        frame, _, _, _ = env.step(action)
-        cv2.imshow("state_pixels", frame[:, :, ::-1])
+        step_results = env.step(action)
+        # print(step_results)
+        obs, reward, done, info = step_results
+        # cv2.imshow("state_pixels", frame[:, :, ::-1])
         cv2.waitKey(1)
+
+        if done or info['is_success']:
+            env.reset()
+            exit(0)
 
         frames += 1
         print(frames)
+
+
     env.close()
 
 
@@ -51,7 +72,7 @@ if __name__ == '__main__':
 
 
 
-
+#
 #
 # p.init()
 # reward = 0.0

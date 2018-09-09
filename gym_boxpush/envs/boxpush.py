@@ -14,7 +14,7 @@ import random
 
 FPS = 300
 
-PHYSICS_DELTA_TIME = 300
+PHYSICS_DELTA_TIME = 600
 ACTIONS = [[0, 0], [1, 0], [1, 0.5], [1, -0.5], [1, 1]]
 
 STATE_W = 64
@@ -22,6 +22,9 @@ STATE_H = 64
 WINDOW_W = 64
 WINDOW_H = 64
 
+def goal_distance(goal_a, goal_b):
+    assert goal_a.shape == goal_b.shape
+    return np.linalg.norm(goal_a - goal_b, axis=-1)
 
 def percent_round_int(percent, x):
     return np.round(percent * x * 0.01).astype(int)
@@ -37,7 +40,7 @@ def pol2cart(rho, phi):
 
 class TeleporterPair:
     
-    class Teleporter():
+    class Teleporter:
 
         def __init__(self, x, y, width, height):
             self.geom = None
@@ -61,6 +64,17 @@ class TeleporterPair:
                       TeleporterPair.Teleporter(x2, y2, width2, height2)]
 
 
+class BackgroundRect:
+
+    def __init__(self, x, y, width, height, color=(.4, .4, .4)):
+        self.geom = None
+        self.transform = None
+        self.color = color
+        self.movable = False
+        self.length = np.asarray([width, height])
+        self.center = np.asarray([x, y], dtype=np.float)
+
+
 class Box():
 
     def __init__(self, x, y, width, height, mass=100, color=(0, 0, 0), bounciness=0.01,
@@ -82,7 +96,7 @@ class Box():
         self.center = np.asarray([x, y], dtype=np.float)
         self.vel = np.asarray([0.0, 0.0], dtype=np.float)
 
-    def get_update(self, dt, axis, force_applied=None, gravitational_force=None):
+    def get_update(self, dt, axis, max_speed, force_applied=None, gravitational_force=None):
 
         if self.movable:
             # print("force: {}, dt: {}".format(force_applied, dt))
@@ -95,14 +109,17 @@ class Box():
                 force += gravitational_force[axis]
 
             accel = force / self.mass
-            accel = accel * 0.0004
+            # accel = accel * 0.0002
+            accel = accel * 0.002
+
 
             # print("accel: {}".format(accel))
-            new_vel[axis] = new_vel[axis] + (accel * dt)
+            new_vel[axis] = max(min(new_vel[axis] + (accel * dt), max_speed), -max_speed)
 
             new_center = np.copy(self.center)
             new_center[axis] = new_center[axis] + (self.vel[axis] * dt)
 
+            new_vel = [0, 0]
             # print("update: new_center: {}, old_center: {}, change: {}, new_vel: {}, change: {}".format(new_center, self.center, new_center-self.center, new_vel, new_vel - self.vel))
             return new_vel, new_center
         else:
@@ -117,18 +134,11 @@ class Box():
 
 
 class BoxPush(gym.Env):
-    metadata = {
-        'render.modes': ['human', 'rgb_array', 'state_pixels'],
-        'video.frames_per_second': FPS
-    }
 
-    def __init__(self,  max_episode_length=2000):
-        # self.action_space = gym.spaces.Box( np.array([0, -1]), np.array([+1, +1]), dtype=np.float32)  # force magnitude and direction
-        self.action_space = gym.spaces.Discrete(5)
+    def __init__(self,  max_episode_length=50):
+        self.action_space = gym.spaces.Box(low=-1, high=1, shape=(2,), dtype=np.float32)
 
-        self.observation_space = gym.spaces.Box(low=0, high=255, shape=(STATE_H, STATE_W, 3), dtype=np.uint8)
-
-        self.max_episode_length = max_episode_length
+        self._max_episode_steps = max_episode_length
 
         self.pyglet = None
         self.gl = None
@@ -149,7 +159,18 @@ class BoxPush(gym.Env):
         self.record_write_steps_recorded = 0
         self.record_write_max_steps = 2000
 
+        self.max_speed = 5e-3
+        self.goal_distance_threshold=5
+
         self.reset_state()
+
+        obs = self.get_obs()
+
+        self.observation_space = gym.spaces.Dict(dict(
+            desired_goal=gym.spaces.Box(-np.inf, np.inf, shape=obs['achieved_goal'].shape, dtype='float32'),
+            achieved_goal=gym.spaces.Box(-np.inf, np.inf, shape=obs['achieved_goal'].shape, dtype='float32'),
+            observation=gym.spaces.Box(-np.inf, np.inf, shape=obs['observation'].shape, dtype='float32'),
+        ))
 
     def set_record_write(self, write_dir, prefix):
         if not os.path.exists(write_dir):
@@ -190,6 +211,8 @@ class BoxPush(gym.Env):
         im.save(filename)
 
     def reset_state(self):
+        self.goal = self._sample_goal()
+
         self.force_applied = np.asarray([0.0, 0.0])
         self.boxes = []
 
@@ -201,48 +224,59 @@ class BoxPush(gym.Env):
             mass=100,
             color=(0, 1, 0),
             friction=0.1,
-            is_controlled=True
+            is_controlled=True,
         )
 
-        box1 = Box(
-            x=45,
-            y=15,
-            width=10,
-            height=10,
-            mass=100,
-            color=(.55, .2, .2),
-            friction=0.1,
+        goal_rect = BackgroundRect(
+            x=self.goal[0],
+            y=self.goal[1],
+            width=self.goal_distance_threshold,
+            height=self.goal_distance_threshold,
+            color=(1.0, .5, .5)
         )
 
-        box2 = Box(
-            x=55,
-            y=15,
-            width=10,
-            height=10,
-            mass=100,
-            color=(.55, .2, .2),
-            friction=0.1,
-        )
+        self.background_rects = []
+        self.background_rects.append(goal_rect)
 
-        bouncy_box = Box(
-            x=75,
-            y=15,
-            width=10,
-            height=10,
-            mass=100,
-            color=(.4, .7, 1),
-            friction=0.1,
-            bounciness=0.8,
-        )
+        # box1 = Box(
+        #     x=45,
+        #     y=15,
+        #     width=10,
+        #     height=10,
+        #     mass=100,
+        #     color=(.55, .2, .2),
+        #     friction=0.1,
+        # )
+        #
+        # box2 = Box(
+        #     x=55,
+        #     y=15,
+        #     width=10,
+        #     height=10,
+        #     mass=100,
+        #     color=(.55, .2, .2),
+        #     friction=0.1,
+        # )
+        #
+        # bouncy_box = Box(
+        #     x=75,
+        #     y=15,
+        #     width=10,
+        #     height=10,
+        #     mass=100,
+        #     color=(.4, .7, 1),
+        #     friction=0.1,
+        #     bounciness=0.8,
+        # )
 
-        self.player.vel = player.vel + [0, -0.01]
-        box1.vel = box1.vel + [0.0, 0.01]
-        box2.vel = box2.vel + [0.0, 0.01]
-        bouncy_box.vel = bouncy_box.vel + [0.03, 0.01]
+        self.player.vel = self.player.vel + [0, 0]
+        # box1.vel = box1.vel + [0.0, 0.01]
+        # box2.vel = box2.vel + [0.0, 0.01]
+        # bouncy_box.vel = bouncy_box.vel + [0.03, 0.01]
 
-        self.boxes.append(box1)
-        self.boxes.append(box2)
-        self.boxes.append(bouncy_box)
+        # self.boxes.append(box1)
+        # self.boxes.append(box2)
+        # self.boxes.append(bouncy_box)
         self.boxes.append(self.player)
 
         # Add walls
@@ -278,20 +312,20 @@ class BoxPush(gym.Env):
             movable=False,
             friction=0.01,
         ))
-        self.boxes.append(Box(
-            x=30,
-            y=60,
-            width=30,
-            height=30,
-            movable=False,
-            friction=0.01,
-        ))
+        # self.boxes.append(Box(
+        #     x=30,
+        #     y=60,
+        #     width=30,
+        #     height=30,
+        #     movable=False,
+        #     friction=0.01,
+        # ))
 
         self.teleporter_pairs = []
-        self.teleporter_pairs.append(TeleporterPair(
-            7, 93, 15, 15,
-            70, 93, 15, 15,
-        ))
+        # self.teleporter_pairs.append(TeleporterPair(
+        #     7, 93, 15, 15,
+        #     70, 93, 15, 15,
+        # ))
 
     @staticmethod
     def _check_rect_collision(center1, half_length1, movable1, center2, half_length2, movable2):
@@ -356,7 +390,7 @@ class BoxPush(gym.Env):
         for k in range(0, 2):
 
             updates = list(
-                map(lambda x: x.get_update(dt, axis=k, force_applied=self.force_applied, gravitational_force=None),
+                map(lambda x: x.get_update(dt, axis=k, max_speed=self.max_speed, force_applied=self.force_applied, gravitational_force=None),
                     self.boxes))
 
             done = False
@@ -402,27 +436,52 @@ class BoxPush(gym.Env):
                             teleporter.ports[(p + 1) % 2].empty = False
                             break
 
+    def compute_reward(self, achieved_goal, desired_goal, info):
+        # Compute distance between goal and the achieved goal.
+        d = goal_distance(achieved_goal, desired_goal)
+        return -(d > self.goal_distance_threshold).astype(np.float32)
+
+    def _sample_goal(self):
+        return np.random.uniform(10, 90, size=2)
+
+    def get_obs(self):
+        obs = np.asarray([*self.player.center, *self.player.vel])
+        achieved_goal = np.squeeze(self.player.center.copy())
+        return {
+            'observation': obs.copy(),
+            'achieved_goal': achieved_goal.copy(),
+            'desired_goal': self.goal.copy(),
+        }
+
+    def _is_success(self, achieved_goal, desired_goal):
+        d = goal_distance(achieved_goal, desired_goal)
+        return (d < self.goal_distance_threshold).astype(np.float32)
+
     def step(self, action):
         # print(action)
+        # action = np.clip(action, self.action_space.low, self.action_space.high)
         assert self.action_space.contains(action)
+        assert self.done is False
 
-        self.force_applied = pol2cart(*ACTIONS[action])
+        # self.force_applied = pol2cart(*ACTIONS[action])
+        self.force_applied = np.asarray(action)
 
         self.log_location()
 
-
+        self._handle_physics(PHYSICS_DELTA_TIME)
         self._handle_physics(PHYSICS_DELTA_TIME)
 
-        state = self.render("state_pixels")
 
-        reward = 0
+        # state = self.render("state_pixels")
+        obs = self.get_obs()
 
-        self.current_step +=1
-        if self.current_step >= 2 and (self.current_step >= self.max_episode_length or
-                                       random.random() < 1/self.max_episode_length):
-            self.done = True
+        done = False
+        info = {
+            'is_success': self._is_success(obs['achieved_goal'], self.goal),
+        }
+        reward = self.compute_reward(obs['achieved_goal'], self.goal, info)
 
-        return state, reward, self.done, {}
+        return obs, reward, self.done, info
 
     def render(self, mode='human'):
 
@@ -449,6 +508,20 @@ class BoxPush(gym.Env):
                     teleporter.geom.add_attr(teleporter.transform)
                     teleporter.geom.set_color(1, .8, .8)
                     self.viewer.add_geom(teleporter.geom)
+
+            for background_rect in self.background_rects:
+                r = background_rect.length[0] / 2
+                t = background_rect.length[1] / 2
+                l, b = -r, -t
+                background_rect.geom = rendering.FilledPolygon([(l, b), (l, t), (r, t), (r, b)])
+                background_rect.transform = rendering.Transform()
+                background_rect.transform.set_translation(percent_round_int(background_rect.center[0], WINDOW_W),
+                                                     percent_round_int(background_rect.center[1], WINDOW_H))
+                background_rect.transform.set_scale(WINDOW_W / 100, WINDOW_H / 100)
+                background_rect.geom.add_attr(background_rect.transform)
+                background_rect.geom.set_color(*background_rect.color)
+                self.viewer.add_geom(background_rect.geom)
+
             for box in self.boxes:
                 r = box.length[0] / 2
                 t = box.length[1] / 2
@@ -560,7 +633,8 @@ class BoxPush(gym.Env):
         self.reset_state()
         self.close()
         self.viewer = None
-        return self.render('state_pixels')
+        self.human_render = False
+        return self.get_obs()
 
     def debug_show_player_at_location(self, location_x):
         """
