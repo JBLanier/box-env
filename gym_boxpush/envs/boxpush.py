@@ -19,8 +19,8 @@ ACTIONS = [[0, 0], [1, 0], [1, 0.5], [1, -0.5], [1, 1]]
 
 STATE_W = 64
 STATE_H = 64
-WINDOW_W = 64
-WINDOW_H = 64
+WINDOW_W = 320
+WINDOW_H = 320
 
 def goal_distance(goal_a, goal_b):
     assert goal_a.shape == goal_b.shape
@@ -64,6 +64,16 @@ class TeleporterPair:
                       TeleporterPair.Teleporter(x2, y2, width2, height2)]
 
 
+class RandomTeleporter:
+    def __init__(self, x, y, width, height):
+        self.geom = None
+        self.transform = None
+
+        self.movable = False
+        self.length = np.asarray([width, height])
+
+        self.center = np.asarray([x, y], dtype=np.float)
+
 class BackgroundRect:
 
     def __init__(self, x, y, width, height, color=(.4, .4, .4)):
@@ -73,6 +83,8 @@ class BackgroundRect:
         self.movable = False
         self.length = np.asarray([width, height])
         self.center = np.asarray([x, y], dtype=np.float)
+
+
 
 
 class Box():
@@ -119,7 +131,9 @@ class Box():
             new_center = np.copy(self.center)
             new_center[axis] = new_center[axis] + (self.vel[axis] * dt)
 
+            # Remove this line to preserve momentum across frames
             new_vel = [0, 0]
+
             # print("update: new_center: {}, old_center: {}, change: {}, new_vel: {}, change: {}".format(new_center, self.center, new_center-self.center, new_vel, new_vel - self.vel))
             return new_vel, new_center
         else:
@@ -135,7 +149,11 @@ class Box():
 
 class BoxPush(gym.Env):
 
-    def __init__(self,  max_episode_length=50):
+    def __init__(self,  max_episode_length=40, her=True):
+
+        self.her = her
+        self.log_location = True
+
         self.action_space = gym.spaces.Box(low=-1, high=1, shape=(2,), dtype=np.float32)
 
         self._max_episode_steps = max_episode_length
@@ -166,11 +184,14 @@ class BoxPush(gym.Env):
 
         obs = self.get_obs()
 
-        self.observation_space = gym.spaces.Dict(dict(
-            desired_goal=gym.spaces.Box(-np.inf, np.inf, shape=obs['achieved_goal'].shape, dtype='float32'),
-            achieved_goal=gym.spaces.Box(-np.inf, np.inf, shape=obs['achieved_goal'].shape, dtype='float32'),
-            observation=gym.spaces.Box(-np.inf, np.inf, shape=obs['observation'].shape, dtype='float32'),
-        ))
+        if self.her:
+            self.observation_space = gym.spaces.Dict(dict(
+                desired_goal=gym.spaces.Box(-np.inf, np.inf, shape=obs['achieved_goal'].shape, dtype='float32'),
+                achieved_goal=gym.spaces.Box(-np.inf, np.inf, shape=obs['achieved_goal'].shape, dtype='float32'),
+                observation=gym.spaces.Box(-np.inf, np.inf, shape=obs['observation'].shape, dtype='float32'),
+            ))
+        else:
+            self.observation_space = gym.spaces.Box(-np.inf, np.inf, shape=obs.shape, dtype='float32')
 
     def set_record_write(self, write_dir, prefix):
         if not os.path.exists(write_dir):
@@ -178,13 +199,12 @@ class BoxPush(gym.Env):
 
         self.flush_record_write()
         if not self.record_write_dir:
-            self.save_heatmap_picture(os.path.join(write_dir,'level.png'))
+            self._save_heatmap_picture(os.path.join(write_dir, 'level.png'))
         self.record_write_dir = write_dir
         self.record_write_prefix = prefix
         self.record_write_file_number = 0
 
         return True
-
 
     def flush_record_write(self, create_new_record=True):
         if self.location_record is not None and self.record_write_steps_recorded > 0:
@@ -197,7 +217,7 @@ class BoxPush(gym.Env):
         if create_new_record:
             self.location_record = np.empty(shape=(self.record_write_max_steps, 2), dtype=np.float32)
 
-    def log_location(self):
+    def _log_location(self):
         if self.location_record is not None:
             self.location_record[self.record_write_steps_recorded] = self.player.center
             self.record_write_steps_recorded += 1
@@ -205,20 +225,31 @@ class BoxPush(gym.Env):
             if self.record_write_steps_recorded >= self.record_write_max_steps:
                 self.flush_record_write()
 
-    def save_heatmap_picture(self, filename):
+    def _save_heatmap_picture(self, filename):
         background_picture_np = self.debug_show_player_at_location(location_x=10000)
         im = Image.fromarray(background_picture_np)
         im.save(filename)
 
+    @staticmethod
+    def _check_rect_collision(center1, half_length1, movable1, center2, half_length2, movable2):
+
+        if not movable1 and not movable2:
+            # don't consider intersecting immobile objects as collisions
+            return False
+
+        return np.all(
+            (center1 + half_length1 >= center2 - half_length2 + 0.0001) &
+            (center1 - half_length1 + 0.0001 <= center2 + half_length2)
+        )
+
     def reset_state(self):
-        self.goal = self._sample_goal()
 
         self.force_applied = np.asarray([0.0, 0.0])
         self.boxes = []
 
         self.player = Box(
-            x=50,
-            y=85,
+            x=20,
+            y=30,
             width=10,
             height=10,
             mass=100,
@@ -226,17 +257,6 @@ class BoxPush(gym.Env):
             friction=0.1,
             is_controlled=True,
         )
-
-        goal_rect = BackgroundRect(
-            x=self.goal[0],
-            y=self.goal[1],
-            width=self.goal_distance_threshold,
-            height=self.goal_distance_threshold,
-            color=(1.0, .5, .5)
-        )
-
-        self.background_rects = []
-        self.background_rects.append(goal_rect)
 
         # box1 = Box(
         #     x=45,
@@ -312,14 +332,59 @@ class BoxPush(gym.Env):
             movable=False,
             friction=0.01,
         ))
-        # self.boxes.append(Box(
-        #     x=30,
-        #     y=60,
-        #     width=30,
-        #     height=30,
-        #     movable=False,
-        #     friction=0.01,
-        # ))
+        self.boxes.append(Box(
+            x=20,
+            y=60,
+            width=49,
+            height=10,
+            movable=False,
+            friction=0.01,
+        ))
+
+        self.boxes.append(Box(
+            x=80,
+            y=60,
+            width=48,
+            height=10,
+            movable=False,
+            friction=0.01,
+        ))
+
+        self.boxes.append(Box(
+            x=61,
+            y=74,
+            width=10,
+            height=30,
+            movable=False,
+            friction=0.01,
+        ))
+
+        self.boxes.append(Box(
+            x=20,
+            y=90,
+            width=10,
+            height=30,
+            movable=False,
+            friction=0.01,
+        ))
+
+        self.boxes.append(Box(
+            x=35,
+            y=20,
+            width=10,
+            height=40,
+            movable=False,
+            friction=0.01,
+        ))
+
+        self.boxes.append(Box(
+            x=60,
+            y=35,
+            width=40,
+            height=10,
+            movable=False,
+            friction=0.01,
+        ))
 
         self.teleporter_pairs = []
         # self.teleporter_pairs.append(TeleporterPair(
@@ -327,17 +392,38 @@ class BoxPush(gym.Env):
         #     70, 93, 15, 15,
         # ))
 
-    @staticmethod
-    def _check_rect_collision(center1, half_length1, movable1, center2, half_length2, movable2):
+        self.random_teleporters = []
+        # self.random_teleporters.append(RandomTeleporter(
+        #     50,50,10,10
+        # ))
 
-        if not movable1 and not movable2:
-            # don't consider intersecting immobile objects as collisions
-            return False
+        is_valid_goal = False
 
-        return np.all(
-            (center1 + half_length1 >= center2 - half_length2 + 0.0001) &
-            (center1 - half_length1 + 0.0001 <= center2 + half_length2)
-        )
+        while not is_valid_goal:
+
+            self.goal = self._sample_goal()
+
+            self.goal_rect = BackgroundRect(
+                x=self.goal[0],
+                y=self.goal[1],
+                width=self.goal_distance_threshold,
+                height=self.goal_distance_threshold,
+                color=(1.0, .5, .5)
+            )
+
+            is_goal_colliding_with_level = False
+            for box in self.boxes:
+                if self._check_rect_collision(
+                        self.goal_rect.center, self.goal_rect.length/2, True,
+                        box.center, box.length/2, True
+                ):
+                    is_goal_colliding_with_level = True
+
+            if not is_goal_colliding_with_level:
+                is_valid_goal = True
+
+        self.background_rects = []
+        self.background_rects.append(self.goal_rect)
 
     def _handle_collision(self, update_a, update_b, box_a, box_b, axis):
         # returns true is there was a collision
@@ -436,17 +522,35 @@ class BoxPush(gym.Env):
                             teleporter.ports[(p + 1) % 2].empty = False
                             break
 
+        for teleporter in self.random_teleporters:
+            for box in self.boxes:
+                if self._check_rect_collision(box.center, box.length / 2, box.movable,
+                                              teleporter.center, teleporter.length / 2,
+                                              teleporter.movable):
+                    random_location = np.random.uniform(10, 90, size=2)
+
+                    update = (box.vel, random_location)
+                    # print("Teleporter update: {}".format(update))
+                    box.apply_update(update)
+
+
     def compute_reward(self, achieved_goal, desired_goal, info):
         # Compute distance between goal and the achieved goal.
         d = goal_distance(achieved_goal, desired_goal)
         return -(d > self.goal_distance_threshold).astype(np.float32)
 
     def _sample_goal(self):
-        return np.random.uniform(10, 90, size=2)
+        # return np.random.uniform([10, 70], [90, 90], size=2)
+        return np.random.uniform([10, 10], [90, 90], size=2)
+
 
     def get_obs(self):
         obs = np.asarray([*self.player.center, *self.player.vel])
         achieved_goal = np.squeeze(self.player.center.copy())
+
+        if not self.her:
+            return obs.copy()
+
         return {
             'observation': obs.copy(),
             'achieved_goal': achieved_goal.copy(),
@@ -466,7 +570,8 @@ class BoxPush(gym.Env):
         # self.force_applied = pol2cart(*ACTIONS[action])
         self.force_applied = np.asarray(action)
 
-        self.log_location()
+        if self.log_location:
+            self._log_location()
 
         self._handle_physics(PHYSICS_DELTA_TIME)
         self._handle_physics(PHYSICS_DELTA_TIME)
@@ -476,10 +581,15 @@ class BoxPush(gym.Env):
         obs = self.get_obs()
 
         done = False
-        info = {
-            'is_success': self._is_success(obs['achieved_goal'], self.goal),
-        }
-        reward = self.compute_reward(obs['achieved_goal'], self.goal, info)
+
+        if self.her:
+            info = {
+                'is_success': self._is_success(obs['achieved_goal'], self.goal),
+            }
+            reward = self.compute_reward(obs['achieved_goal'], self.goal, info)
+        else:
+            info = {}
+            reward = -1
 
         return obs, reward, self.done, info
 
@@ -508,6 +618,19 @@ class BoxPush(gym.Env):
                     teleporter.geom.add_attr(teleporter.transform)
                     teleporter.geom.set_color(1, .8, .8)
                     self.viewer.add_geom(teleporter.geom)
+
+            for teleporter in self.random_teleporters:
+                r = teleporter.length[0] / 2
+                t = teleporter.length[1] / 2
+                l, b = -r, -t
+                teleporter.geom = rendering.FilledPolygon([(l, b), (l, t), (r, t), (r, b)])
+                teleporter.transform = rendering.Transform()
+                teleporter.transform.set_translation(percent_round_int(teleporter.center[0], WINDOW_W),
+                                                     percent_round_int(teleporter.center[1], WINDOW_H))
+                teleporter.transform.set_scale(WINDOW_W / 100, WINDOW_H / 100)
+                teleporter.geom.add_attr(teleporter.transform)
+                teleporter.geom.set_color(1, .8, .8)
+                self.viewer.add_geom(teleporter.geom)
 
             for background_rect in self.background_rects:
                 r = background_rect.length[0] / 2
